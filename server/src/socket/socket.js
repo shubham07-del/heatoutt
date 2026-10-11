@@ -2,10 +2,10 @@ import { Server } from 'socket.io';
 
 let io;
 
-export const initSocket = (server) => {
+export const initSocket = (server, frontendOrigin) => {
   io = new Server(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+      origin: frontendOrigin,
       methods: ['GET', 'POST']
     }
   });

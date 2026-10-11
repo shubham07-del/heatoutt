@@ -15,13 +15,16 @@ connectDB();
 
 
 const app = express();
+const frontendOrigin = (
+  process.env.FRONTEND_URL || 'http://localhost:5173'
+).replace(/\/+$/, '');
 
 // Security middleware
 app.use(helmet());
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: frontendOrigin,
   credentials:true,
   methods: ['GET', 'POST']
 }));
@@ -59,7 +62,7 @@ const PORT = process.env.PORT || 3000;
 const server = http.createServer(app);
 
 // Initialize Socket.io
-initSocket(server);
+initSocket(server, frontendOrigin);
 
 // Start server
 server.listen(PORT, () => {
