@@ -80,7 +80,11 @@ const MapController = ({ devices, selectedDevice }) => {
   const prevSelectedRef = useRef(null);
 
   useEffect(() => {
-    if (selectedDevice) {
+    const hasCoordinates = (device) =>
+      Number.isFinite(device?.latitude) && Number.isFinite(device?.longitude);
+    const locatedDevices = devices.filter(hasCoordinates);
+
+    if (selectedDevice && hasCoordinates(selectedDevice)) {
       // Smooth flyTo zoom in animation to the selected node
       map.flyTo(
         [selectedDevice.latitude, selectedDevice.longitude],
@@ -89,13 +93,13 @@ const MapController = ({ devices, selectedDevice }) => {
       );
     } else {
       // Fit all devices when no device is selected
-      if (!devices || devices.length === 0) return;
-      if (devices.length === 1) {
-        map.setView([devices[0].latitude, devices[0].longitude], 15, { animate: true });
+      if (locatedDevices.length === 0) return;
+      if (locatedDevices.length === 1) {
+        map.setView([locatedDevices[0].latitude, locatedDevices[0].longitude], 15, { animate: true });
         return;
       }
       const bounds = L.latLngBounds(
-        devices.map((d) => [d.latitude, d.longitude])
+        locatedDevices.map((d) => [d.latitude, d.longitude])
       );
       map.fitBounds(bounds, { padding: [70, 70], animate: true, duration: 1.2 });
     }
@@ -182,13 +186,20 @@ const NodeCard = ({ device, isSelected, onClick }) => {
 
       {/* Footer: Risk Badge & Zoom indicator */}
       <div className="flex items-center justify-between">
-        <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[9px] font-bold tracking-wider ${getRiskTailwindClass(
-            device.risk
-          )}`}
-        >
-          {(device.risk ?? 'UNKNOWN').replace('_', ' ')}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[9px] font-bold tracking-wider ${getRiskTailwindClass(
+              device.risk
+            )}`}
+          >
+            {device.riskLabel ?? (device.risk ?? 'UNKNOWN').replace('_', ' ')}
+          </span>
+          {device.riskClass != null && (
+            <span className="text-[9px] font-mono text-text-muted">
+              CLASS {device.riskClass}
+            </span>
+          )}
+        </div>
         <span className="text-[10px] font-semibold text-orange-500 flex items-center gap-0.5 opacity-80 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all">
           <ZoomIn className="w-3 h-3" /> Zoom Map
         </span>
@@ -199,7 +210,7 @@ const NodeCard = ({ device, isSelected, onClick }) => {
 
 // ─── Selected Device Detail Panel (Slide-in) ──────────────────────────────────
 const DeviceDetailPanel = ({ device, onBack }) => {
-  const riskLabel = (device.risk ?? 'UNKNOWN').replace('_', ' ');
+  const riskLabel = device.riskLabel ?? (device.risk ?? 'UNKNOWN').replace('_', ' ');
 
   return (
     <div
@@ -273,6 +284,9 @@ const DeviceDetailPanel = ({ device, onBack }) => {
           }
           valueClass="text-amber-500 font-bold"
         />
+        {device.riskClass != null && (
+          <StatRow icon={AlertTriangle} label="Risk class" value={device.riskClass} />
+        )}
         {device.predictedRisk && (
           <StatRow
             icon={AlertTriangle}
@@ -487,7 +501,9 @@ const HeatMap = ({
         <MapController devices={devices} selectedDevice={selectedDevice} />
 
         {/* Render Map Markers */}
-        {devices.map((device) => {
+        {devices.filter((device) =>
+          Number.isFinite(device.latitude) && Number.isFinite(device.longitude)
+        ).map((device) => {
           const isSelected = selectedDevice?.deviceId === device.deviceId;
           return (
             <Marker
@@ -531,7 +547,7 @@ const HeatMap = ({
                       backgroundColor: getRiskColor(device.risk) + '15',
                     }}
                   >
-                    {(device.risk ?? 'UNKNOWN').replace('_', ' ')} RISK
+                    {device.riskLabel ?? (device.risk ?? 'UNKNOWN').replace('_', ' ')} RISK
                   </div>
 
                   <button

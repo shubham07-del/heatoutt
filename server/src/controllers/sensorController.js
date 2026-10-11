@@ -53,7 +53,7 @@ export const receiveSensorData = async (req, res, next) => {
       deviceId: validatedData.deviceId,
       temperature: validatedData.temperature,
       humidity: validatedData.humidity,
-      predictedTemperature: validatedData.predictedTemperature ?? validatedData.temperature,
+      predictedTemperature: validatedData.predictedTemperature,
       predictionMinutes: validatedData.predictionMinutes,
       predictedRisk: validatedData.predictedRisk,
       riskClass: validatedData.riskClass,
@@ -66,9 +66,9 @@ export const receiveSensorData = async (req, res, next) => {
     // Update device last seen status
     deviceStatusCache.set(validatedData.deviceId, Date.now());
 
-    // Emit Socket.IO event to clients in the device room
+    // Broadcast readings so connected dashboards can discover unregistered devices.
     const io = getIo();
-    io.to(validatedData.deviceId).emit("sensor:update", {
+    io.emit("sensor:update", {
       deviceId: sensorData.deviceId,
       temperature: sensorData.temperature,
       humidity: sensorData.humidity,
@@ -175,25 +175,35 @@ export const getDeviceStatus = (req, res, next) => {
 export const getDevices = async (req, res, next) => {
   try {
     const TWO_MINUTES_MS = 2 * 60 * 1000;
+    const reportedDeviceIds = await SensorData.distinct('deviceId');
+    const registeredIds = new Set(DEVICE_REGISTRY.map((device) => device.deviceId));
+    const devicesToLoad = [
+      ...DEVICE_REGISTRY,
+      ...reportedDeviceIds
+        .filter((deviceId) => !registeredIds.has(deviceId))
+        .map((deviceId) => ({ deviceId, locationName: deviceId })),
+    ];
 
-    // Fetch latest sensor reading for each registered device in parallel
+    // Include registered nodes and any devices that have reported sensor data.
     const devices = await Promise.all(
-      DEVICE_REGISTRY.map(async (device) => {
+      devicesToLoad.map(async (device) => {
         const latest = await SensorData.findOne({ deviceId: device.deviceId })
           .sort({ timestamp: -1 })
           .lean();
 
-        const lastSeenMs = deviceStatusCache.get(device.deviceId);
+        const lastSeenMs =
+          deviceStatusCache.get(device.deviceId) ??
+          (latest?.timestamp ? new Date(latest.timestamp).getTime() : null);
         const status =
-          lastSeenMs && Date.now() - lastSeenMs <= TWO_MINUTES_MS
+          lastSeenMs !== null && Date.now() - lastSeenMs <= TWO_MINUTES_MS
             ? 'ONLINE'
             : 'OFFLINE';
 
         return {
           deviceId: device.deviceId,
           locationName: device.locationName,
-          latitude: latest?.gps?.lat ?? device.latitude,
-          longitude: latest?.gps?.lng ?? device.longitude,
+          latitude: latest?.gps?.lat ?? device.latitude ?? null,
+          longitude: latest?.gps?.lng ?? device.longitude ?? null,
           temperature: latest?.temperature ?? null,
           humidity: latest?.humidity ?? null,
           predictedTemperature: latest?.predictedTemperature ?? null,
@@ -204,9 +214,13 @@ export const getDevices = async (req, res, next) => {
           gps: latest?.gps ?? null,
           risk: latest?.risk ?? 'LOW',
           status,
-          lastSeen: lastSeenMs ? new Date(lastSeenMs).toISOString() : null,
+          lastSeen: lastSeenMs !== null ? new Date(lastSeenMs).toISOString() : null,
         };
       })
+    );
+    devices.sort(
+      (a, b) =>
+        (Date.parse(b.lastSeen ?? '') || 0) - (Date.parse(a.lastSeen ?? '') || 0)
     );
 
     res.status(200).json({

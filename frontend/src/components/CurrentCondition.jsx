@@ -27,7 +27,7 @@ const CurrentCondition = ({ weatherData, device }) => {
   };
 
   const risk = data?.risk || 'MODERATE';
-  const riskDisplay = risk.replace('_', ' ');
+  const riskDisplay = device?.riskLabel ?? risk.replace('_', ' ');
 
   return (
     <div className="bg-bg-surface p-8 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] border border-border-subtle flex flex-col gap-8 relative overflow-hidden transition-colors">

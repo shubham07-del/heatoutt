@@ -154,28 +154,37 @@ const Dashboard = () => {
       setLastSync(new Date());
 
       // Update matching device in-place — do NOT call fitBounds
-      setDevices((prev) =>
-        prev.map((d) =>
-          d.deviceId === data.deviceId
-            ? {
-                ...d,
-                temperature: data.temperature ?? d.temperature,
-                humidity: data.humidity ?? d.humidity,
-                predictedTemperature:
-                  data.predictedTemperature ?? d.predictedTemperature,
-                predictionMinutes:
-                  data.predictionMinutes ?? d.predictionMinutes,
-                predictedRisk: data.predictedRisk ?? d.predictedRisk,
-                gps: data.gps ?? d.gps,
-                latitude: data.gps?.lat ?? d.latitude,
-                longitude: data.gps?.lng ?? d.longitude,
-                risk: data.risk ?? d.risk,
-                lastSeen: data.timestamp ?? d.lastSeen,
-                status: 'ONLINE',
-              }
-            : d
-        )
-      );
+      setDevices((prev) => {
+        const existingDevice = prev.find((d) => d.deviceId === data.deviceId);
+        const updatedDevice = {
+          ...(existingDevice ?? {
+            deviceId: data.deviceId,
+            locationName: data.deviceId,
+            latitude: null,
+            longitude: null,
+          }),
+          temperature: data.temperature ?? existingDevice?.temperature,
+          humidity: data.humidity ?? existingDevice?.humidity,
+          predictedTemperature:
+            data.predictedTemperature ?? existingDevice?.predictedTemperature,
+          predictionMinutes:
+            data.predictionMinutes ?? existingDevice?.predictionMinutes ?? 5,
+          predictedRisk: data.predictedRisk ?? existingDevice?.predictedRisk,
+          riskClass: data.riskClass ?? existingDevice?.riskClass,
+          riskLabel: data.riskLabel ?? existingDevice?.riskLabel,
+          gps: data.gps ?? existingDevice?.gps,
+          latitude: data.gps?.lat ?? existingDevice?.latitude ?? null,
+          longitude: data.gps?.lng ?? existingDevice?.longitude ?? null,
+          risk: data.risk ?? existingDevice?.risk,
+          lastSeen: data.timestamp ?? new Date().toISOString(),
+          status: 'ONLINE',
+        };
+
+        return [
+          updatedDevice,
+          ...prev.filter((d) => d.deviceId !== data.deviceId),
+        ];
+      });
 
       // Also update selectedDevice if it's the one that got updated
       setSelectedDevice((prev) => {
@@ -189,11 +198,13 @@ const Dashboard = () => {
           predictionMinutes:
             data.predictionMinutes ?? prev.predictionMinutes,
           predictedRisk: data.predictedRisk ?? prev.predictedRisk,
+          riskClass: data.riskClass ?? prev.riskClass,
+          riskLabel: data.riskLabel ?? prev.riskLabel,
           gps: data.gps ?? prev.gps,
           latitude: data.gps?.lat ?? prev.latitude,
           longitude: data.gps?.lng ?? prev.longitude,
           risk: data.risk ?? prev.risk,
-          lastSeen: data.timestamp ?? prev.lastSeen,
+          lastSeen: data.timestamp ?? new Date().toISOString(),
           status: 'ONLINE',
         };
       });
@@ -221,10 +232,8 @@ const Dashboard = () => {
   // ── Device selection handlers ─────────────────────────────────────────────
   const handleSelectDevice = useCallback((device) => {
     // Find the latest version from devices state (may have been updated via socket)
-    setSelectedDevice((prev) => {
-      const latest = devices.find((d) => d.deviceId === device.deviceId) ?? device;
-      return latest;
-    });
+    const latest = devices.find((d) => d.deviceId === device.deviceId) ?? device;
+    setSelectedDevice(latest);
   }, [devices]);
 
   const handleDeselectDevice = useCallback(() => {
