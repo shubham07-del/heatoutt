@@ -12,12 +12,8 @@ import { RefreshCw } from 'lucide-react';
 import SemiGauge from './SemiGauge';
 import { getSensorHistory } from '../services/api';
 
-const FALLBACK = {
-  temperature: 25.8,
-  humidity: 95,
-};
-
 const RANGE_OPTIONS = [
+  { label: 'All records', hours: 'all' },
   { label: 'Last 15 min', hours: 0.25 },
   { label: 'Last 1 hour', hours: 1 },
   { label: 'Last 6 hours', hours: 6 },
@@ -27,36 +23,18 @@ const RANGE_OPTIONS = [
 const formatTick = (iso, hours) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
+  if (hours === 'all') {
+    return d.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
   if (hours >= 6) {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
-
-const seedHistory = (temperature, humidity, hours = 1) => {
-  const now = Date.now();
-  const targetT = Number.isFinite(temperature) ? temperature : 28;
-  const targetH = Number.isFinite(humidity) ? humidity : 55;
-  const count = 60;
-  const stepMs = (hours * 60 * 60 * 1000) / count;
-  const points = [];
-  let t = targetT - 0.6;
-  let h = targetH - 1.1;
-  for (let i = count; i >= 0; i -= 1) {
-    t += (targetT - t) * 0.12 + (Math.random() - 0.5) * 0.16;
-    h += (targetH - h) * 0.12 + (Math.random() - 0.5) * 0.28;
-    points.push({
-      timestamp: new Date(now - i * stepMs).toISOString(),
-      temperature: Number(t.toFixed(2)),
-      humidity: Number(h.toFixed(2)),
-    });
-  }
-  points[points.length - 1] = {
-    timestamp: new Date(now).toISOString(),
-    temperature: Number(targetT.toFixed(2)),
-    humidity: Number(targetH.toFixed(2)),
-  };
-  return points;
 };
 
 const ChartTooltip = ({ active, payload, label, unit }) => {
@@ -73,7 +51,7 @@ const ChartTooltip = ({ active, payload, label, unit }) => {
   );
 };
 
-const SparkChart = ({ data, dataKey, unit, yDomain, isDark }) => {
+const SparkChart = ({ data, dataKey, unit, yDomain, isDark, hours }) => {
   const stroke = '#73bf69';
   const grid = isDark ? '#2d2f36' : '#cbd5e1';
   const tick = isDark ? '#9ca3af' : '#64748b';
@@ -90,7 +68,7 @@ const SparkChart = ({ data, dataKey, unit, yDomain, isDark }) => {
         <CartesianGrid stroke={grid} strokeDasharray="0" vertical={true} horizontal={true} />
         <XAxis
           dataKey="timestamp"
-          tickFormatter={(v) => formatTick(v, 1)}
+          tickFormatter={(v) => formatTick(v, hours)}
           tick={{ fill: tick, fontSize: 11 }}
           axisLine={{ stroke: grid }}
           tickLine={false}
@@ -128,50 +106,58 @@ const Panel = ({ children, className = '' }) => (
 );
 
 const TempHumidityMonitor = ({
-  weatherData,
   selectedDevice,
   devices = [],
   isDark,
 }) => {
-  const [hours, setHours] = useState(1);
+  const [hours, setHours] = useState('all');
   const [history, setHistory] = useState([]);
-  const [refreshAt, setRefreshAt] = useState(new Date());
+  const [historyLoadedKey, setHistoryLoadedKey] = useState(null);
+  const [historyError, setHistoryError] = useState(null);
 
   const sourceDevice = selectedDevice || devices[0] || null;
-
-  const temperature =
-    sourceDevice?.temperature ?? weatherData?.temperature ?? FALLBACK.temperature;
-  const humidity =
-    sourceDevice?.humidity ?? weatherData?.humidity ?? FALLBACK.humidity;
+  const historyKey = `${sourceDevice?.deviceId ?? 'none'}:${hours}`;
+  const temperature = sourceDevice?.temperature ?? null;
+  const humidity = sourceDevice?.humidity ?? null;
 
   const locationLabel = sourceDevice
     ? `${sourceDevice.locationName} · ${sourceDevice.deviceId}`
     : 'City-wide aggregate';
+  const currentHistoryError =
+    historyError?.key === historyKey ? historyError.message : null;
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
       if (!sourceDevice?.deviceId) {
-        setHistory(seedHistory(temperature, humidity, hours));
         return;
       }
       try {
         const json = await getSensorHistory(sourceDevice.deviceId, hours);
         const rows = Array.isArray(json?.data) ? json.data : [];
-        const cutoff = Date.now() - hours * 60 * 60 * 1000;
         const mapped = rows
-          .filter((r) => new Date(r.timestamp).getTime() >= cutoff)
           .map((r) => ({
+            id: r._id,
             timestamp: new Date(r.timestamp).toISOString(),
             temperature: r.temperature,
             humidity: r.humidity,
+            deviceId: sourceDevice.deviceId,
           }));
         if (!cancelled) {
-          setHistory(mapped.length ? mapped : seedHistory(temperature, humidity, hours));
+          setHistory(mapped);
+          setHistoryError(null);
+          setHistoryLoadedKey(historyKey);
         }
-      } catch {
-        if (!cancelled) setHistory(seedHistory(temperature, humidity, hours));
+      } catch (error) {
+        if (!cancelled) {
+          setHistory([]);
+          setHistoryError({
+            key: historyKey,
+            message: error.message || 'Could not load saved sensor readings.',
+          });
+          setHistoryLoadedKey(historyKey);
+        }
       }
     };
 
@@ -179,53 +165,106 @@ const TempHumidityMonitor = ({
     return () => {
       cancelled = true;
     };
-    // Seed only when device or range changes — live appends happen below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceDevice?.deviceId, hours]);
+  }, [sourceDevice?.deviceId, hours, historyKey]);
 
   useEffect(() => {
-    if (!Number.isFinite(temperature) && !Number.isFinite(humidity)) return;
-    setRefreshAt(new Date());
-    setHistory((prev) => {
-      const last = prev[prev.length - 1];
-      const nextPoint = {
-        timestamp: new Date().toISOString(),
-        temperature: Number.isFinite(temperature)
-          ? temperature
-          : last?.temperature,
-        humidity: Number.isFinite(humidity) ? humidity : last?.humidity,
-      };
-      if (
-        last &&
-        last.temperature === nextPoint.temperature &&
-        last.humidity === nextPoint.humidity
-      ) {
-        return prev;
+    if (
+      !sourceDevice?.deviceId ||
+      historyLoadedKey !== historyKey
+    ) return undefined;
+
+    const refreshHistory = async () => {
+      const latestTimestamp = history[history.length - 1]?.timestamp;
+      try {
+        const json = await getSensorHistory(
+          sourceDevice.deviceId,
+          hours,
+          latestTimestamp
+        );
+        const rows = Array.isArray(json?.data) ? json.data : [];
+        setHistoryError((previous) =>
+          previous?.key === historyKey ? null : previous
+        );
+        if (rows.length === 0) return;
+
+        const newPoints = rows.map((row) => ({
+          id: row._id,
+          timestamp: new Date(row.timestamp).toISOString(),
+          temperature: row.temperature,
+          humidity: row.humidity,
+          deviceId: sourceDevice.deviceId,
+        }));
+        const cutoff =
+          hours === 'all'
+            ? null
+            : Date.now() - Number(hours) * 60 * 60 * 1000;
+
+        setHistory((previous) => {
+          const pointsById = new Map(previous.map((point) => [point.id, point]));
+          let changed = false;
+          newPoints.forEach((point) => {
+            const existing = pointsById.get(point.id);
+            if (
+              !existing ||
+              existing.timestamp !== point.timestamp ||
+              existing.temperature !== point.temperature ||
+              existing.humidity !== point.humidity
+            ) {
+              changed = true;
+              pointsById.set(point.id, point);
+            }
+          });
+          if (!changed) return previous;
+
+          return [...pointsById.values()]
+            .filter(
+              (point) =>
+                cutoff === null || new Date(point.timestamp).getTime() >= cutoff
+            )
+            .sort(
+              (a, b) =>
+                new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            );
+        });
+      } catch (error) {
+        console.error('Failed to refresh saved sensor readings:', error);
       }
-      const cutoff = Date.now() - hours * 60 * 60 * 1000;
-      return [...prev, nextPoint].filter(
-        (p) => new Date(p.timestamp).getTime() >= cutoff
-      );
-    });
-  }, [temperature, humidity, hours]);
+    };
+
+    const interval = setInterval(refreshHistory, 30000);
+    return () => clearInterval(interval);
+  }, [
+    currentHistoryError,
+    history,
+    historyKey,
+    historyLoadedKey,
+    hours,
+    sourceDevice?.deviceId,
+  ]);
+
+  const visibleHistory = useMemo(
+    () => (historyLoadedKey === historyKey ? history : []),
+    [history, historyKey, historyLoadedKey]
+  );
+  const historyLoading = Boolean(sourceDevice?.deviceId) && historyLoadedKey !== historyKey;
 
   const tempDomain = useMemo(() => {
-    const vals = history.map((p) => p.temperature).filter(Number.isFinite);
+    const vals = visibleHistory.map((p) => p.temperature).filter(Number.isFinite);
     if (!vals.length) return ['auto', 'auto'];
     const min = Math.min(...vals);
     const max = Math.max(...vals);
     const pad = Math.max(0.2, (max - min) * 0.15);
     return [Number((min - pad).toFixed(1)), Number((max + pad).toFixed(1))];
-  }, [history]);
+  }, [visibleHistory]);
 
   const humDomain = useMemo(() => {
-    const vals = history.map((p) => p.humidity).filter(Number.isFinite);
+    const vals = visibleHistory.map((p) => p.humidity).filter(Number.isFinite);
     if (!vals.length) return ['auto', 'auto'];
     const min = Math.min(...vals);
     const max = Math.max(...vals);
     const pad = Math.max(0.3, (max - min) * 0.15);
     return [Number((min - pad).toFixed(1)), Number((max + pad).toFixed(1))];
-  }, [history]);
+  }, [visibleHistory]);
 
   return (
     <section className="bg-bg-surface border border-border-subtle rounded-xl shadow-md overflow-hidden flex flex-col transition-colors">
@@ -242,7 +281,9 @@ const TempHumidityMonitor = ({
         <div className="flex items-center gap-2">
           <select
             value={hours}
-            onChange={(e) => setHours(Number(e.target.value))}
+            onChange={(e) =>
+              setHours(e.target.value === 'all' ? 'all' : Number(e.target.value))
+            }
             className="bg-bg-base border border-border-subtle text-xs text-text-main rounded-md px-2 py-1.5 outline-none"
             aria-label="Time range"
           >
@@ -254,11 +295,8 @@ const TempHumidityMonitor = ({
           </select>
           <div className="flex items-center gap-1.5 text-[11px] text-text-muted px-2 py-1 rounded-md border border-border-subtle">
             <RefreshCw className="w-3 h-3" />
-            Live
+            {visibleHistory.length} records
           </div>
-          <span className="hidden md:inline text-[11px] font-mono text-text-muted">
-            {refreshAt.toLocaleTimeString()}
-          </span>
         </div>
       </header>
 
@@ -297,28 +335,50 @@ const TempHumidityMonitor = ({
           <h3 className="text-[13px] font-medium text-text-muted text-center pt-3">
             Temperature
           </h3>
-          <div className="flex-1 min-h-0 px-1 pb-2">
+          <div className="relative flex-1 min-h-0 px-1 pb-2">
             <SparkChart
-              data={history}
+              data={visibleHistory}
               dataKey="temperature"
               unit="°C"
               yDomain={tempDomain}
               isDark={isDark}
+              hours={hours}
             />
+            {visibleHistory.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-text-muted">
+                {currentHistoryError ??
+                  (historyLoading
+                    ? 'Loading saved readings...'
+                    : sourceDevice
+                      ? 'No saved readings for this device.'
+                      : 'No sensor device selected.')}
+              </div>
+            )}
           </div>
         </Panel>
         <Panel className="h-[240px] sm:h-[260px] flex flex-col">
           <h3 className="text-[13px] font-medium text-text-muted text-center pt-3">
             Humidity
           </h3>
-          <div className="flex-1 min-h-0 px-1 pb-2">
+          <div className="relative flex-1 min-h-0 px-1 pb-2">
             <SparkChart
-              data={history}
+              data={visibleHistory}
               dataKey="humidity"
               unit="%H"
               yDomain={humDomain}
               isDark={isDark}
+              hours={hours}
             />
+            {visibleHistory.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-text-muted">
+                {currentHistoryError ??
+                  (historyLoading
+                    ? 'Loading saved readings...'
+                    : sourceDevice
+                      ? 'No saved readings for this device.'
+                      : 'No sensor device selected.')}
+              </div>
+            )}
           </div>
         </Panel>
       </div>

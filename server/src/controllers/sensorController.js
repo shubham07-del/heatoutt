@@ -124,14 +124,29 @@ export const getLatestSensorData = async (req, res, next) => {
 export const getHistoricalSensorData = async (req, res, next) => {
   try {
     const { deviceId } = req.params;
-    const hours = parseInt(req.query.hours, 10) || 24;
+    const query = { deviceId };
+    let timeThreshold = null;
+    if (req.query.hours !== undefined) {
+      const hours = Number(req.query.hours);
+      if (!Number.isFinite(hours) || hours <= 0) {
+        res.status(400);
+        throw new Error('hours must be a positive number');
+      }
+      timeThreshold = Date.now() - hours * 60 * 60 * 1000;
+    }
+    if (req.query.since !== undefined) {
+      const since = Date.parse(req.query.since);
+      if (!Number.isFinite(since)) {
+        res.status(400);
+        throw new Error('since must be a valid ISO 8601 timestamp');
+      }
+      timeThreshold = Math.max(timeThreshold ?? 0, since);
+    }
+    if (timeThreshold !== null) {
+      query.timestamp = { $gte: new Date(timeThreshold) };
+    }
 
-    const timeThreshold = new Date(Date.now() - hours * 60 * 60 * 1000);
-
-    const historyData = await SensorData.find({
-      deviceId,
-      timestamp: { $gte: timeThreshold }
-    }).sort({ timestamp: 1 }); // Chronological order
+    const historyData = await SensorData.find(query).sort({ timestamp: 1 });
 
     res.status(200).json({
       success: true,

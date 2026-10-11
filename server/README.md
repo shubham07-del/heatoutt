@@ -35,7 +35,7 @@ This backend receives data from IoT monitoring nodes (including Arduino Uno Q ga
 
 ## Raspberry Pi Integration
 
-Configure the Arduino Uno Q application to POST a JSON reading to `/api/sensor-data` whenever it has a new sensor/GPS/model reading. Send the request over Wi-Fi with the device API key configured below. GPS coordinates are optional; when omitted or unavailable, the website uses the device's registered coordinates.
+Configure the Arduino Uno Q application to POST a JSON reading to `/api/sensor-data` whenever it has a new sensor/GPS/model reading. Send the request over Wi-Fi with the device API key configured below. GPS coordinates are optional; without GPS or registered coordinates the reading still appears in the dashboard, but has no map marker.
 
 ### Python Example for Raspberry Pi
 
@@ -111,6 +111,7 @@ while True:
 
 ### 3. Get Historical Sensor Data
 - **GET** `/api/sensor-data/history/:deviceId?hours=24`
+- Omitting `hours` returns all stored readings for the device, ordered from oldest to newest. The optional `since` ISO 8601 query parameter fetches records from that timestamp onward.
 
 ### 4. Get Device Status
 - **GET** `/api/devices/:deviceId/status`

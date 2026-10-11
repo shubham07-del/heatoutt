@@ -9,38 +9,6 @@ import { getCurrentWeather, getDevices } from '../services/api';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-// ─── Dev-only static fallback ─────────────────────────────────────────────────
-// Used ONLY when the backend /api/devices call fails in development.
-const DEV_FALLBACK_DEVICES =
-  import.meta.env.DEV
-    ? [
-        {
-          deviceId: 'BUS_STOP_01',
-          locationName: 'Patia Bus Stop',
-          latitude: 20.3548,
-          longitude: 85.8186,
-          temperature: 35.4,
-          humidity: 68,
-          predictedTemperature: 37.1,
-          risk: 'HIGH',
-          status: 'ONLINE',
-          lastSeen: new Date(Date.now() - 12000).toISOString(),
-        },
-        {
-          deviceId: 'SCHOOL',
-          locationName: 'Master Canteen Square',
-          latitude: 20.267,
-          longitude: 85.843,
-          temperature: 39.2,
-          humidity: 72,
-          predictedTemperature: 40.4,
-          risk: 'VERY_HIGH',
-          status: 'ONLINE',
-          lastSeen: new Date(Date.now() - 8000).toISOString(),
-        },
-      ]
-    : [];
-
 // ─── Section Header ────────────────────────────────────────────────────────────
 const SectionHeader = ({ title, subtitle, children }) => (
   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 sm:mb-5">
@@ -120,12 +88,9 @@ const Dashboard = () => {
           throw new Error('Unexpected response from /api/devices');
         }
       } catch (err) {
-        console.warn('Failed to fetch devices from API, using fallback:', err.message);
-        if (DEV_FALLBACK_DEVICES.length > 0) {
-          setDevices(DEV_FALLBACK_DEVICES);
-        } else {
-          setDevicesError('Could not load monitoring nodes. Please check the backend.');
-        }
+        console.error('Failed to fetch devices from API:', err.message);
+        setDevices([]);
+        setDevicesError('Could not load monitoring nodes. Please check the backend.');
       } finally {
         setDevicesLoading(false);
       }
@@ -328,7 +293,6 @@ const Dashboard = () => {
 
               {/* Charts */}
               <TempHumidityMonitor
-                weatherData={weatherData}
                 selectedDevice={selectedDevice}
                 devices={devices}
                 isDark={isDark}
@@ -381,7 +345,6 @@ const Dashboard = () => {
 
               {/* Charts */}
               <TempHumidityMonitor
-                weatherData={weatherData}
                 selectedDevice={selectedDevice}
                 devices={devices}
                 isDark={isDark}

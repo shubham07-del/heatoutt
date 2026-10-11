@@ -2,32 +2,24 @@ import React from 'react';
 import { getRiskTailwindClass } from '../utils/riskUtils';
 import { Thermometer, Droplets, Wind, AlertTriangle } from 'lucide-react';
 
-const FALLBACK_WEATHER = {
-  temperature: 25.8,
-  apparentTemperature: 31,
-  humidity: 95,
-  windSpeed: 9.3,
-};
-
 const CurrentCondition = ({ weatherData, device }) => {
-  // Use real data or fallback so we never get stuck on loading
-  const raw = weatherData || FALLBACK_WEATHER;
+  const raw = weatherData;
 
   const data = {
-    temperature: device?.temperature ?? raw.temperature,
-    feelsLike: raw.apparentTemperature,
-    humidity: device?.humidity ?? raw.humidity,
-    wind: raw.windSpeed,
+    temperature: device ? device.temperature : raw?.temperature,
+    feelsLike: raw?.apparentTemperature,
+    humidity: device ? device.humidity : raw?.humidity,
+    wind: raw?.windSpeed,
     predictedTemp: device?.predictedTemperature,
     predictionMinutes: device?.predictionMinutes ?? 5,
-    risk: device?.risk ?? (raw.temperature > 38 ? 'VERY_HIGH'
-        : raw.temperature > 35 ? 'HIGH'
-        : raw.temperature > 32 ? 'MODERATE'
-        : 'LOW')
+    risk: device ? device.risk : (raw?.temperature > 38 ? 'VERY_HIGH'
+        : raw?.temperature > 35 ? 'HIGH'
+        : raw?.temperature > 32 ? 'MODERATE'
+        : raw?.temperature != null ? 'LOW' : null)
   };
 
-  const risk = data?.risk || 'MODERATE';
-  const riskDisplay = device?.riskLabel ?? risk.replace('_', ' ');
+  const risk = data.risk;
+  const riskDisplay = device?.riskLabel ?? risk?.replace('_', ' ') ?? 'UNKNOWN';
 
   return (
     <div className="bg-bg-surface p-8 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] border border-border-subtle flex flex-col gap-8 relative overflow-hidden transition-colors">
@@ -44,12 +36,16 @@ const CurrentCondition = ({ weatherData, device }) => {
         </div>
         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded border shadow-sm ${getRiskTailwindClass(risk)}`}>
           <AlertTriangle className="w-4 h-4" />
-          <span className="font-bold text-xs tracking-wider">{riskDisplay} RISK</span>
+          <span className="font-bold text-xs tracking-wider">
+            {risk ? `${riskDisplay} RISK` : 'NO SENSOR DATA'}
+          </span>
         </div>
       </div>
 
       <div className="flex items-baseline gap-2 relative z-10">
-        <span className="text-7xl font-bold tracking-tighter text-text-main drop-shadow-sm">{data?.temperature}</span>
+        <span className="text-7xl font-bold tracking-tighter text-text-main drop-shadow-sm">
+          {data.temperature ?? '—'}
+        </span>
         <span className="text-3xl font-medium text-text-muted">°C</span>
       </div>
 
@@ -59,7 +55,9 @@ const CurrentCondition = ({ weatherData, device }) => {
             <Thermometer className="w-4 h-4 text-text-muted" />
             <div className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Feels Like</div>
           </div>
-          <div className="text-lg sm:text-xl font-semibold text-text-main">{data?.feelsLike}°C</div>
+          <div className="text-lg sm:text-xl font-semibold text-text-main">
+            {data.feelsLike != null ? `${data.feelsLike}°C` : '—'}
+          </div>
         </div>
 
         <div className="bg-bg-element p-3 sm:p-4 rounded-lg border border-border-subtle flex sm:flex-col justify-between sm:justify-start items-center sm:items-start transition-colors">
@@ -67,7 +65,9 @@ const CurrentCondition = ({ weatherData, device }) => {
             <Droplets className="w-4 h-4 text-blue-500/70" />
             <div className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Humidity</div>
           </div>
-          <div className="text-lg sm:text-xl font-semibold text-text-main">{data?.humidity}%</div>
+          <div className="text-lg sm:text-xl font-semibold text-text-main">
+            {data.humidity != null ? `${data.humidity}%` : '—'}
+          </div>
         </div>
 
         <div className="bg-bg-element p-3 sm:p-4 rounded-lg border border-border-subtle flex sm:flex-col justify-between sm:justify-start items-center sm:items-start transition-colors">
@@ -75,7 +75,9 @@ const CurrentCondition = ({ weatherData, device }) => {
             <Wind className="w-4 h-4 text-teal-500/70" />
             <div className="text-[10px] font-bold text-text-muted uppercase tracking-widest">Wind</div>
           </div>
-          <div className="text-lg sm:text-xl font-semibold text-text-main">{data?.wind} <span className="text-sm font-medium text-text-muted">km/h</span></div>
+          <div className="text-lg sm:text-xl font-semibold text-text-main">
+            {data.wind != null ? <>{data.wind} <span className="text-sm font-medium text-text-muted">km/h</span></> : '—'}
+          </div>
         </div>
       </div>
 

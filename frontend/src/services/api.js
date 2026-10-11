@@ -21,9 +21,11 @@ export const getLatestSensorData = async (deviceId) => {
   return response.data;
 };
 
-export const getSensorHistory = async (deviceId, hours = 24) => {
+export const getSensorHistory = async (deviceId, hours, since) => {
+  const params = hours == null || hours === 'all' ? {} : { hours };
+  if (since) params.since = since;
   const response = await api.get(`/api/sensor-data/history/${deviceId}`, {
-    params: { hours },
+    params,
   });
   return response.data;
 };

@@ -37,7 +37,8 @@ const SemiGauge = ({
   const start = 0;
   const end = 180;
   const unused = isDark ? '#22252b' : '#cfd6de';
-  const safeValue = Number.isFinite(Number(value)) ? Number(value) : null;
+  const safeValue =
+    value != null && Number.isFinite(Number(value)) ? Number(value) : null;
   const ratio = safeValue == null ? 0 : clamp((safeValue - min) / (max - min), 0, 1);
   const valueAngle = start + ratio * (end - start);
   const display = safeValue == null ? '—' : safeValue.toFixed(1);
