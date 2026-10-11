@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import http from 'http';
 import connectDB from './config/db.js';
 import sensorRoutes from './routes/sensorRoutes.js';
@@ -29,13 +28,6 @@ app.use(cors({
   methods: ['GET', 'POST']
 }));
 app.use("/api/weather", weatherRoutes);
-// Rate limiting
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again after 15 minutes'
-});
-app.use('/api/', apiLimiter);
 
 // Body parser with size limit
 app.use(express.json({ limit: '10kb' }));
