@@ -54,7 +54,7 @@ headers = {
 # Example payload loop (replace sample values with readings from your sensors and model)
 while True:
     data = {
-        "deviceId": "BUS_STOP_01",
+        "deviceId": "YOUR_DEVICE_ID",
         "temperature": 35.4,
         "humidity": 68,
         "predictedTemperature": 37.1,
@@ -91,7 +91,7 @@ while True:
 - Body:
   ```json
   {
-    "deviceId": "BUS_STOP_01",
+    "deviceId": "YOUR_DEVICE_ID",
     "temperature": 35.4,
     "humidity": 68,
     "riskClass": 2,
@@ -126,7 +126,7 @@ Clients can connect via Socket.IO to receive real-time updates when new sensor d
 1. Connect to the Socket.IO server.
 2. Emit `subscribe` event with the `deviceId` to join the room.
    ```javascript
-   socket.emit("subscribe", "BUS_STOP_01");
+   socket.emit("subscribe", "YOUR_DEVICE_ID");
    ```
 3. Listen for `sensor:update` events.
    ```javascript
