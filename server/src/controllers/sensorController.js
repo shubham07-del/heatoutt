@@ -11,17 +11,27 @@ const sensorDataSchema = z.object({
   deviceId: z.string().min(1, "Device ID is required"),
   temperature: z.number({ required_error: "Temperature is required" }),
   humidity: z.number({ required_error: "Humidity is required" }),
-  predictedTemperature: z.number({ required_error: "Predicted Temperature is required" }),
+  predictedTemperature: z.number().optional(),
   predictionMinutes: z.number().int().positive().max(60).default(5),
   predictedRisk: z.enum(['LOW', 'MODERATE', 'HIGH', 'VERY_HIGH']).optional(),
+  riskClass: z.union([z.string().min(1), z.number()]).optional(),
+  riskLabel: z.string().min(1).optional(),
   gps: z.object({
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180)
   }).optional(),
-  risk: z.enum(['LOW', 'MODERATE', 'HIGH', 'VERY_HIGH'], {
-    errorMap: () => ({ message: "Invalid risk level" })
-  }),
-  timestamp: z.string().datetime({ message: "Invalid timestamp format, must be ISO 8601" })
+  risk: z.enum(['LOW', 'MODERATE', 'HIGH', 'VERY_HIGH']).optional(),
+  timestamp: z.string().datetime({ message: "Invalid timestamp format, must be ISO 8601" }).optional()
+}).superRefine((data, context) => {
+  const hasLegacyRisk = data.risk !== undefined;
+  const hasNewRiskFields = data.riskClass !== undefined && data.riskLabel !== undefined;
+
+  if (!hasLegacyRisk && !hasNewRiskFields) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Provide risk or both riskClass and riskLabel'
+    });
+  }
 });
 
 // @desc    Receive sensor data from Raspberry Pi
@@ -30,17 +40,27 @@ const sensorDataSchema = z.object({
 export const receiveSensorData = async (req, res, next) => {
   try {
     const validatedData = sensorDataSchema.parse(req.body);
+    console.log('HeatWatch sensor reading:', validatedData);
+
+    const risk =
+      validatedData.risk ??
+      (['LOW', 'MODERATE', 'HIGH', 'VERY_HIGH'].includes(validatedData.riskLabel?.toUpperCase())
+        ? validatedData.riskLabel.toUpperCase()
+        : undefined);
+    const timestamp = validatedData.timestamp ? new Date(validatedData.timestamp) : new Date();
 
     const sensorData = await SensorData.create({
       deviceId: validatedData.deviceId,
       temperature: validatedData.temperature,
       humidity: validatedData.humidity,
-      predictedTemperature: validatedData.predictedTemperature,
+      predictedTemperature: validatedData.predictedTemperature ?? validatedData.temperature,
       predictionMinutes: validatedData.predictionMinutes,
       predictedRisk: validatedData.predictedRisk,
+      riskClass: validatedData.riskClass,
+      riskLabel: validatedData.riskLabel,
       gps: validatedData.gps,
-      risk: validatedData.risk,
-      timestamp: new Date(validatedData.timestamp)
+      risk,
+      timestamp
     });
 
     // Update device last seen status
@@ -55,15 +75,16 @@ export const receiveSensorData = async (req, res, next) => {
       predictedTemperature: sensorData.predictedTemperature,
       predictionMinutes: sensorData.predictionMinutes,
       predictedRisk: sensorData.predictedRisk,
+      riskClass: sensorData.riskClass,
+      riskLabel: sensorData.riskLabel,
       gps: sensorData.gps,
       risk: sensorData.risk,
       timestamp: sensorData.timestamp
     });
 
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      message: "Sensor data received",
-      data: sensorData
+      message: "Sensor data received"
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -178,6 +199,8 @@ export const getDevices = async (req, res, next) => {
           predictedTemperature: latest?.predictedTemperature ?? null,
           predictionMinutes: latest?.predictionMinutes ?? 5,
           predictedRisk: latest?.predictedRisk ?? null,
+          riskClass: latest?.riskClass ?? null,
+          riskLabel: latest?.riskLabel ?? null,
           gps: latest?.gps ?? null,
           risk: latest?.risk ?? 'LOW',
           status,

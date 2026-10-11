@@ -87,12 +87,15 @@ while True:
 ### 1. Receive Sensor Data (Protected)
 - **POST** `/api/sensor-data`
 - Headers: `x-device-api-key`
+- Required body fields: `deviceId`, `temperature`, `humidity`, `riskClass`, and `riskLabel`. Legacy clients may send `risk` instead of the `riskClass`/`riskLabel` pair. Prediction, GPS, and timestamp fields are optional.
 - Body:
   ```json
   {
     "deviceId": "BUS_STOP_01",
     "temperature": 35.4,
     "humidity": 68,
+    "riskClass": 2,
+    "riskLabel": "HIGH",
     "predictedTemperature": 37.1,
     "predictionMinutes": 5,
     "predictedRisk": "HIGH",

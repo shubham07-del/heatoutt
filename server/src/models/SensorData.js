@@ -16,7 +16,7 @@ const sensorDataSchema = new mongoose.Schema({
   },
   predictedTemperature: {
     type: Number,
-    required: true
+    required: false
   },
   predictionMinutes: {
     type: Number,
@@ -26,14 +26,19 @@ const sensorDataSchema = new mongoose.Schema({
     type: String,
     enum: ['LOW', 'MODERATE', 'HIGH', 'VERY_HIGH']
   },
+  riskClass: {
+    type: mongoose.Schema.Types.Mixed
+  },
+  riskLabel: {
+    type: String
+  },
   gps: {
     lat: Number,
     lng: Number
   },
   risk: {
     type: String,
-    enum: ['LOW', 'MODERATE', 'HIGH', 'VERY_HIGH'],
-    required: true
+    enum: ['LOW', 'MODERATE', 'HIGH', 'VERY_HIGH']
   },
   timestamp: {
     type: Date,
